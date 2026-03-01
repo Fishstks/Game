@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Whack Before You Yak - Two Rivers Council Edition</title>
+<style>
+.watermark {
+    position: fixed;
+    top: 15px;
+    right: 20px;
+    font-size: 14px;      /* Small and subtle */
+    font-family: 'Courier New', monospace; /* Gives it a "branded" look */
+    color:#FF0000;
+    opacity: 0.6;        /* Slightly see-through */
+    letter-spacing: 1px;
+    z-index: 10001;      /* Ensures it stays above the gavel and images */
+    pointer-events: none; /* Allows clicks to pass through it to buttons below */
+}
+
+.subtitle {
+    font-size: 18px;      /* Smaller than the main title */
+    color: #aaa;         /* A soft grey color */
+    margin-top: -10px;   /* Pulls it closer to the main title */
+    margin-bottom: 20px; /* Space before the buttons start */
+    font-style: italic;  /* Makes it stand out */
+}
+    body {
+        margin: 0;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        text-align: center;
+        background-color: #111;
+        color: white;
+        cursor: none; 
+        touch-action: manipulation;
+    }
+
+    #gameContainer {
+        position: relative;
+        width: 700px;
+        height: 260px;
+        margin: 0 auto;
+        background-image: url('background.jpg');
+        background-size: 100% 100%;
+        overflow: hidden;
+        max-width: 100%;
+        height: auto;
+        aspect-ratio: 700 / 260;
+        border: 2px solid #444;
+    }
+
+    .member {
+        position: absolute;
+        width: 55px;  
+        height: 60px; 
+        transform: translateY(260px); 
+        transition: transform 0.2s ease;
+        padding: 20px; 
+        box-sizing: content-box;
+        z-index: 5;
+    }
+
+    .up { transform: translateY(0px); }
+
+    .manager-style.up {
+        filter: grayscale(0.5); 
+    }
+
+    #gavel {
+        position: absolute;
+        width: 110px;          
+        pointer-events: none; 
+        z-index: 9999;         
+        display: none;
+    }
+
+    @keyframes whack {
+        0% { transform: rotate(0deg); }
+        50% { transform: rotate(-45deg); }
+        100% { transform: rotate(0deg); }
+    }
+    .whacking { animation: whack 0.1s; }
+
+    #ui { margin: 15px; font-size: 22px; }
+    button { 
+        padding: 12px 24px; font-size: 18px; cursor: pointer; 
+        border-radius: 8px; border: none; margin: 5px; font-weight: bold;
+    }
+    .start-btn { background-color: #27ae60; color: white; }
+    .reset-btn { background-color: #7f8c8d; color: white; }
+</style>
+</head>
+<body>
+<body>
+    <div class="watermark">fishstks&trade;</div>  
+<h1>Whack Before You Yak - Two Rivers Council Edition</h1>
+<p class="subtitle">Vent here. Bring solutions there.</p>
+<div id="ui">
+    Total Score: <span id="score">0</span> | Time: <span id="time">30</span>s
+    <br><br>
+    <button class="start-btn" id="startBtn">Swing Away</button>
+    <button class="reset-btn" id="resetBtn">Reset All</button>
+</div>
+
+<div id="gameContainer">
+    <img id="gavel" src="gavel.png">
+    <audio id="boomSound" src="boom.mp3" preload="auto"></audio>
+</div>
+
+<script>
+    const container = document.getElementById("gameContainer");
+    const scoreDisplay = document.getElementById("score");
+    const timeDisplay = document.getElementById("time");
+    const gavel = document.getElementById("gavel");
+    const boomSound = document.getElementById("boomSound");
+    const startBtn = document.getElementById("startBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    let score = 0;
+    let timeLeft = 30;
+    let gameActive = false;
+    let popInterval;
+    let timerInterval;
+    let members = [];
+    let tally = {};
+
+    const seatPositions = [
+       { name: "John Doe", left: 100, bottom: 175, isManager: false }, 
+       { name: "Jane Smith", left: 150, bottom: 175, isManager: false }, 
+       { name: "Member 3", left: 200, bottom: 175, isManager: false }, 
+       { name: "Member 4", left: 250, bottom: 175, isManager: false }, 
+       { name: "Kyle", left: 285, bottom: 175, isManager: true }, 
+       { name: "Member 6", left: 350, bottom: 175, isManager: false }, 
+       { name: "Member 7", left: 400, bottom: 175, isManager: false }, 
+       { name: "Member 8", left: 450, bottom: 175, isManager: false }, 
+       { name: "Member 9", left: 500, bottom: 175, isManager: false }  
+    ];
+
+    function moveHammer(e) {
+        gavel.style.display = 'block';
+        const rect = container.getBoundingClientRect();
+        const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+        const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+        const scale = rect.width / 700;
+        gavel.style.width = (110 * scale) + "px";
+        gavel.style.left = (clientX - rect.left - (45 * scale)) + 'px';
+        gavel.style.top = (clientY - rect.top - (45 * scale)) + 'px';
+    }
+
+    container.addEventListener('mousemove', moveHammer);
+    container.addEventListener('touchmove', (e) => { e.preventDefault(); moveHammer(e); }, {passive: false});
+
+    function createMembers() {
+        seatPositions.forEach((pos, index) => {
+            const img = document.createElement("img");
+            img.src = "image" + (index + 1) + ".png";
+            img.classList.add("member");
+            if (pos.isManager) img.classList.add("manager-style");
+
+            img.style.left = (pos.left / 700 * 100) + "%";
+            img.style.bottom = (pos.bottom / 260 * 100) + "%";
+            img.style.width = (55 / 700 * 100) + "%";
+            img.style.height = (60 / 260 * 100) + "%";
+
+            tally[pos.name] = 0;
+
+            const bonk = () => {
+                if (!gameActive) return;
+                if (pos.isManager) return; 
+
+                // PLAY THE BOOM SOUND
+                boomSound.currentTime = 0; // Rewind to start in case of fast clicks
+                boomSound.play();
+
+                gavel.classList.add('whacking');
+                setTimeout(() => gavel.classList.remove('whacking'), 100);
+
+                if (img.classList.contains("up")) {
+                    img.classList.remove("up");
+                    score++;
+                    tally[pos.name]++;
+                    scoreDisplay.textContent = score;
+                }
+            };
+
+            img.addEventListener("mousedown", bonk);
+            img.addEventListener("touchstart", (e) => { e.preventDefault(); bonk(); });
+
+            container.appendChild(img);
+            members.push(img);
+        });
+    }
+
+    function startGame() {
+        if (gameActive) return;
+        gameActive = true;
+        score = 0;
+        timeLeft = 30;
+        seatPositions.forEach(pos => tally[pos.name] = 0);
+        scoreDisplay.textContent = score;
+        timeDisplay.textContent = timeLeft;
+        members.forEach(m => m.classList.remove("up"));
+
+        popInterval = setInterval(() => {
+            const random = members[Math.floor(Math.random() * members.length)];
+            if (!random.classList.contains("up")) {
+                random.classList.add("up");
+                setTimeout(() => random.classList.remove("up"), 900);
+            }
+        }, 800);
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timeDisplay.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                gameActive = false;
+                clearInterval(popInterval);
+                clearInterval(timerInterval);
+                
+                // NO IMAGE 10 - GO STRAIGHT TO SCORECARD
+                let scorecard = "Meeting Adjourned!\n\nFINAL TALLY:\n";
+                for (const person in tally) {
+                    scorecard += `${person}: ${tally[person]} hits\n`;
+                }
+                scorecard += `\nTOTAL SCORE: ${score}`;
+                alert(scorecard);
+            }
+        }, 1000);
+    }
+
+    startBtn.addEventListener("click", startGame);
+    resetBtn.addEventListener("click", () => location.reload());
+
+    createMembers();
+</script>
+</body>
+</html>
